@@ -43,6 +43,7 @@ var server = app.listen(app.get('port'), function () {
 var CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
 var CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
 var callback_uri = 'http://homestead.test:5000/callback';
+var scopes = 'data:read data:write';
 const querystring = require('querystring');
 
 // Route /auth
@@ -52,7 +53,7 @@ app.get('/auth', function (req, res) {
     + 'response_type=code'
     + '&client_id=' + CLIENT_ID
     + '&redirect_uri=' + encodeURIComponent(callback_uri)
-    + '&scope=' + encodeURIComponent('data:read data:write');
+    + '&scope=' + encodeURIComponent(scopes);
     res.redirect(redirect_uri);
 });
 
@@ -85,8 +86,6 @@ app.get('/callback', function (req, res) {
             res.send('Failed to authenticate');
         });
 });
-
-// var photosceneId;
 
 // Route /photoscene/add
 // Creates and initializes a photoscene for reconstruction.
@@ -215,8 +214,7 @@ app.get('/photoscene/checkprogress', function (req, res) {
                 res.send('<p>Photoscene process is complete!</p><a href="' + nextLink + '">View result of photoscene</a>');
             } else {
                 var nextLink = '/photoscene/delete?token=' + access_token + '&photosceneid=' + photosceneId;
-                res.send('<p>Photoscene is not ready, this may take a while. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...</p>'
-                    + 'Or you can <a href="' + nextLink + '">delete photoscene</a>');
+                res.send('<p>Photoscene is not ready, this may take a while. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...</p>');
             }
             
         })
