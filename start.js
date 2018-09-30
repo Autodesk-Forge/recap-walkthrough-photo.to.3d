@@ -42,34 +42,203 @@ var server = app.listen(app.get('port'), function () {
 //-------------------------------------------------------------------
 var CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
 var CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
-var access_token = '';
-var scopes = ['data:read'];
+var callback_uri = 'http://homestead.test:5000/callback';
 const querystring = require('querystring');
 
-// // Route /auth
+// Route /auth
+// Redirect to Autodesk sign in page for end user to login
 app.get('/auth', function (req, res) {
+    var redirect_uri = 'https://developer.api.autodesk.com/authentication/v1/authorize?'
+    + 'response_type=code'
+    + '&client_id=' + CLIENT_ID
+    + '&redirect_uri=' + encodeURIComponent(callback_uri)
+    + '&scope=' + encodeURIComponent('data:read data:write');
+    res.redirect(redirect_uri);
+});
+
+// Route /callback
+// Get Authorization code from Autodesk signin
+app.get('/callback', function (req, res) {
     Axios({
         method: 'POST',
-        url: 'https://developer.api.autodesk.com/authentication/v1/authenticate',
+        url: 'https://developer.api.autodesk.com/authentication/v1/gettoken',
         headers: {
             'content-type': 'application/x-www-form-urlencoded',
         },
         data: querystring.stringify({
             client_id: CLIENT_ID,
             client_secret: CLIENT_SECRET,
-            grant_type: 'client_credentials',
-            scope: scopes
+            grant_type: 'authorization_code',
+            code: req.query.code,
+            redirect_uri: callback_uri
         })
     })
         .then(function (response) {
             // Success
             access_token = response.data.access_token;
             console.log(response);
-            res.send(access_token);
+            res.send('<p>Authentication success!</p><a href="/photoscene/add?token=' + access_token + '">Add a photoscene</a>');
         })
         .catch(function (error) {
             // Failed
             console.log(error);
             res.send('Failed to authenticate');
+        });
+});
+
+// var photosceneId;
+
+// Route /photoscene/add
+// Creates and initializes a photoscene for reconstruction.
+app.get('/photoscene/add', function (req, res) {
+    var access_token = req.query.token;
+    Axios({
+        method: 'POST',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene',
+        headers: {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + access_token
+        },
+        data: querystring.stringify({
+            scenename: 'myscenename',
+            format: 'rcm'
+        })
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            var photosceneId = response.data.Photoscene.photosceneid;
+            var nextLink = '/photoscene/upload?token=' + access_token + '&photosceneid=' + photosceneId;
+            res.send('<p>Photoscene added!</p><a href="' + nextLink + '">Upload files to photoscene</a>');
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to create a photoscene');
+        });
+});
+
+// Route /photoscene/upload
+// Adds one or more files to a photoscene.
+app.get('/photoscene/upload', function (req, res) {
+    var access_token = req.query.token;
+    var photosceneId = req.query.photosceneid;
+    Axios({
+        method: 'POST',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/file',
+        headers: {
+            'Authorization': 'Bearer ' + access_token
+        },
+        data: querystring.stringify({
+            photosceneid: photosceneId,
+            type: 'image',
+            file: [
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1158.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1159.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1160.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1162.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1163.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1164.JPG',
+                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1165.JPG'
+            ]
+        })
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            var nextLink = '/photoscene/process?token=' + access_token + '&photosceneid=' + photosceneId;
+            res.send('<p>Files added to photoscene!</p><a href="' + nextLink + '">Begin processing photoscene</a>');
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to upload files to photoscene');
+        });
+});
+
+// Route /photoscene/process
+// Starts photoscene processing.
+app.get('/photoscene/process', function (req, res) {
+    var access_token = req.query.token;
+    var photosceneId = req.query.photosceneid;
+    Axios({
+        method: 'POST',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene/' + photosceneId,
+        headers: {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + access_token
+        }
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            var nextLink = '/photoscene/checkprogress?token=' + access_token + '&photosceneid=' + photosceneId;
+            res.send('<p>Photoscene is being processed!</p><a href="' + nextLink + '">Check progress of photoscene</a>');
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to process files in photoscene');
+        });
+});
+
+// Route /photoscene/checkprogress
+// Returns the processing progress and status of a photoscene.
+app.get('/photoscene/checkprogress', function (req, res) {
+    var access_token = req.query.token;
+    var photosceneId = req.query.photosceneid;
+    Axios({
+        method: 'GET',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene/' + photosceneId + '/progress',
+        headers: {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + access_token
+        }
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            if (response.data.Photoscene.progressmsg == 'DONE') {
+                var nextLink = '/photoscene/result?token=' + access_token + '&photosceneid=' + photosceneId;
+                res.send('<p>Photoscene process is complete!</p><a href="' + nextLink + '">View result of photoscene</a>');
+            } else {
+                res.send('Photoscene is not ready. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...');
+            }
+            
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to check progress of photoscene');
+        });
+});
+
+// Route /photoscene/result
+// Returns a time-limited HTTPS link to an output file of the specified format.
+app.get('/photoscene/result', function (req, res) {
+    var access_token = req.query.token;
+    var photosceneId = req.query.photosceneid;
+    Axios({
+        method: 'GET',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene/' + photosceneId + '?format=rcm',
+        headers: {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer ' + access_token
+        }
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            if (response.data.Photoscene.progressmsg == 'DONE') {
+                res.send('Success! This is the scene link: ' + response.data.Photoscene.scenelink);
+            } else {
+                res.send('Photoscene is not ready. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...');
+            }
+            
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to get result of photoscene');
         });
 });
