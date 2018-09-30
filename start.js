@@ -107,6 +107,9 @@ app.get('/photoscene/add', function (req, res) {
         .then(function (response) {
             // Success
             console.log(response);
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
             var photosceneId = response.data.Photoscene.photosceneid;
             var nextLink = '/photoscene/upload?token=' + access_token + '&photosceneid=' + photosceneId;
             res.send('<p>Photoscene added!</p><a href="' + nextLink + '">Upload files to photoscene</a>');
@@ -127,25 +130,28 @@ app.get('/photoscene/upload', function (req, res) {
         method: 'POST',
         url: 'https://developer.api.autodesk.com/photo-to-3d/v1/file',
         headers: {
+            'content-type': 'application/x-www-form-urlencoded',
             'Authorization': 'Bearer ' + access_token
         },
         data: querystring.stringify({
             photosceneid: photosceneId,
             type: 'image',
-            file: [
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1158.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1159.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1160.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1162.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1163.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1164.JPG',
-                'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1165.JPG'
-            ]
+            'file[0]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1158.JPG',
+            'file[1]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1159.JPG',
+            'file[2]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1160.JPG',
+            'file[3]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1162.JPG',
+            'file[4]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1163.JPG',
+            'file[5]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1164.JPG',
+            'file[6]': 'https://s3.amazonaws.com/adsk-recap-public/forge/lion/DSC_1165.JPG'
         })
     })
         .then(function (response) {
             // Success
             console.log(response);
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
+            console.log(JSON.stringify(response.data.Files));
             var nextLink = '/photoscene/process?token=' + access_token + '&photosceneid=' + photosceneId;
             res.send('<p>Files added to photoscene!</p><a href="' + nextLink + '">Begin processing photoscene</a>');
         })
@@ -165,13 +171,16 @@ app.get('/photoscene/process', function (req, res) {
         method: 'POST',
         url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene/' + photosceneId,
         headers: {
-            'content-type': 'application/json',
+            'content-type': 'application/x-www-form-urlencoded',
             'Authorization': 'Bearer ' + access_token
         }
     })
         .then(function (response) {
             // Success
             console.log(response);
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
             var nextLink = '/photoscene/checkprogress?token=' + access_token + '&photosceneid=' + photosceneId;
             res.send('<p>Photoscene is being processed!</p><a href="' + nextLink + '">Check progress of photoscene</a>');
         })
@@ -198,11 +207,16 @@ app.get('/photoscene/checkprogress', function (req, res) {
         .then(function (response) {
             // Success
             console.log(response);
-            if (response.data.Photoscene.progressmsg == 'DONE') {
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
+            if (response.data.Photoscene && response.data.Photoscene.progressmsg == 'DONE') {
                 var nextLink = '/photoscene/result?token=' + access_token + '&photosceneid=' + photosceneId;
                 res.send('<p>Photoscene process is complete!</p><a href="' + nextLink + '">View result of photoscene</a>');
             } else {
-                res.send('Photoscene is not ready. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...');
+                var nextLink = '/photoscene/delete?token=' + access_token + '&photosceneid=' + photosceneId;
+                res.send('<p>Photoscene is not ready, this may take a while. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...</p>'
+                    + 'Or you can <a href="' + nextLink + '">delete photoscene</a>');
             }
             
         })
@@ -229,8 +243,13 @@ app.get('/photoscene/result', function (req, res) {
         .then(function (response) {
             // Success
             console.log(response);
-            if (response.data.Photoscene.progressmsg == 'DONE') {
-                res.send('Success! This is the scene link: ' + response.data.Photoscene.scenelink);
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
+            if (response.data.Photoscene && response.data.Photoscene.progressmsg == 'DONE') {
+                var nextLink = '/photoscene/delete?token=' + access_token + '&photosceneid=' + photosceneId;
+                res.send('<p>Success! This is the scene link:</p><p>' + response.data.Photoscene.scenelink + '</p>'
+                    + 'Would you like to <a href="' + nextLink + '">delete photoscene</a>?');
             } else {
                 res.send('Photoscene is not ready. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...');
             }
@@ -240,5 +259,33 @@ app.get('/photoscene/result', function (req, res) {
             // Failed
             console.log(error);
             res.send('Failed to get result of photoscene');
+        });
+});
+
+// Route /photoscene/delete
+// Deletes a photoscene and its associated assets (images, output files, ...).
+app.get('/photoscene/delete', function (req, res) {
+    var access_token = req.query.token;
+    var photosceneId = req.query.photosceneid;
+    Axios({
+        method: 'DELETE',
+        url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene/' + photosceneId,
+        headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Bearer ' + access_token
+        }
+    })
+        .then(function (response) {
+            // Success
+            console.log(response);
+            if (response.data.Error) {
+                res.send(response.data.Error.msg);
+            }
+            res.send('<p>Photoscene deleted!</p>');
+        })
+        .catch(function (error) {
+            // Failed
+            console.log(error);
+            res.send('Failed to delete photoscene');
         });
 });
