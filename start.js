@@ -40,9 +40,9 @@ var server = app.listen(app.get('port'), function () {
 // Initialize the 2-legged OAuth2 client, set specific scopes and
 // set the token to auto refresh
 //-------------------------------------------------------------------
-var CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
-var CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
-var callback_uri = 'http://localhost:5000/callback';
+var FORGE_CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
+var FORGE_CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
+var FORGE_CALLBACK_URL = 'http://localhost:5000/callback';
 var scopes = 'data:read data:write';
 const querystring = require('querystring');
 
@@ -51,8 +51,8 @@ const querystring = require('querystring');
 app.get('/auth', function (req, res) {
     var redirect_uri = 'https://developer.api.autodesk.com/authentication/v1/authorize?'
     + 'response_type=code'
-    + '&client_id=' + CLIENT_ID
-    + '&redirect_uri=' + encodeURIComponent(callback_uri)
+    + '&client_id=' + FORGE_CLIENT_ID
+    + '&redirect_uri=' + encodeURIComponent(FORGE_CALLBACK_URL)
     + '&scope=' + encodeURIComponent(scopes);
     res.redirect(redirect_uri);
 });
@@ -67,11 +67,11 @@ app.get('/callback', function (req, res) {
             'content-type': 'application/x-www-form-urlencoded',
         },
         data: querystring.stringify({
-            client_id: CLIENT_ID,
-            client_secret: CLIENT_SECRET,
+            client_id: FORGE_CLIENT_ID,
+            client_secret: FORGE_CLIENT_SECRET,
             grant_type: 'authorization_code',
             code: req.query.code,
-            redirect_uri: callback_uri
+            redirect_uri: FORGE_CALLBACK_URL
         })
     })
         .then(function (response) {
