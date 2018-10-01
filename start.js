@@ -42,7 +42,7 @@ var server = app.listen(app.get('port'), function () {
 //-------------------------------------------------------------------
 var CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
 var CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
-var callback_uri = 'http://homestead.test:5000/callback';
+var callback_uri = 'http://localhost:5000/callback';
 var scopes = 'data:read data:write';
 const querystring = require('querystring');
 
