@@ -29,8 +29,8 @@ var app = express();
 app.use(bodyParser.json());
 app.use(express.static(__dirname + '/www'));
 
-// This is for web server to start listening to port 5000
-app.set('port', 5000);
+// This is for web server to start listening to port 3000
+app.set('port', 3000);
 var server = app.listen(app.get('port'), function () {
     console.log('Server listening on port ' + server.address().port);
 });
@@ -40,45 +40,32 @@ var server = app.listen(app.get('port'), function () {
 // Initialize the 2-legged OAuth2 client, set specific scopes and
 // set the token to auto refresh
 //-------------------------------------------------------------------
-var FORGE_CLIENT_ID = '<REPLACE_WITH_FORGE_CLIENT_ID>';
-var FORGE_CLIENT_SECRET = '<REPLACE_WITH_FORGE_CLIENT_SECRET>';
-var FORGE_CALLBACK_URL = 'http://localhost:5000/callback';
+var FORGE_CLIENT_ID = process.env.FORGE_CLIENT_ID;
+var FORGE_CLIENT_SECRET = process.env.FORGE_CLIENT_SECRET;
+var access_token = '';
 var scopes = 'data:read data:write';
 const querystring = require('querystring');
 
-// Route /auth
-// Redirect to Autodesk sign in page for end user to login
-app.get('/auth', function (req, res) {
-    var redirect_uri = 'https://developer.api.autodesk.com/authentication/v1/authorize?'
-    + 'response_type=code'
-    + '&client_id=' + FORGE_CLIENT_ID
-    + '&redirect_uri=' + encodeURIComponent(FORGE_CALLBACK_URL)
-    + '&scope=' + encodeURIComponent(scopes);
-    res.redirect(redirect_uri);
-});
-
-// Route /callback
-// Get Authorization code from Autodesk signin
-app.get('/callback', function (req, res) {
+// // Route /api/forge/oauth
+app.get('/api/forge/oauth', function (req, res) {
     Axios({
         method: 'POST',
-        url: 'https://developer.api.autodesk.com/authentication/v1/gettoken',
+        url: 'https://developer.api.autodesk.com/authentication/v1/authenticate',
         headers: {
             'content-type': 'application/x-www-form-urlencoded',
         },
         data: querystring.stringify({
             client_id: FORGE_CLIENT_ID,
             client_secret: FORGE_CLIENT_SECRET,
-            grant_type: 'authorization_code',
-            code: req.query.code,
-            redirect_uri: FORGE_CALLBACK_URL
+            grant_type: 'client_credentials',
+            scope: scopes
         })
     })
         .then(function (response) {
             // Success
             access_token = response.data.access_token;
             console.log(response);
-            res.send('<p>Authentication success!</p><a href="/photoscene/add?token=' + access_token + '">Add a photoscene</a>');
+            res.send('<p>Authentication success!</p><a href="/api/forge/recap/photoscene/add">Add a photoscene</a>');
         })
         .catch(function (error) {
             // Failed
@@ -87,10 +74,9 @@ app.get('/callback', function (req, res) {
         });
 });
 
-// Route /photoscene/add
+// Route /api/forge/recap/photoscene/add
 // Creates and initializes a photoscene for reconstruction.
-app.get('/photoscene/add', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/add', function (req, res) {
     Axios({
         method: 'POST',
         url: 'https://developer.api.autodesk.com/photo-to-3d/v1/photoscene',
@@ -110,7 +96,7 @@ app.get('/photoscene/add', function (req, res) {
                 res.send(response.data.Error.msg);
             }
             var photosceneId = response.data.Photoscene.photosceneid;
-            var nextLink = '/photoscene/upload?token=' + access_token + '&photosceneid=' + photosceneId;
+            var nextLink = '/api/forge/recap/photoscene/upload?photosceneid=' + photosceneId;
             res.send('<p>Photoscene added!</p><a href="' + nextLink + '">Upload files to photoscene</a>');
         })
         .catch(function (error) {
@@ -120,10 +106,9 @@ app.get('/photoscene/add', function (req, res) {
         });
 });
 
-// Route /photoscene/upload
+// Route /api/forge/recap/photoscene/upload
 // Adds one or more files to a photoscene.
-app.get('/photoscene/upload', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/upload', function (req, res) {
     var photosceneId = req.query.photosceneid;
     Axios({
         method: 'POST',
@@ -151,7 +136,7 @@ app.get('/photoscene/upload', function (req, res) {
                 res.send(response.data.Error.msg);
             }
             console.log(JSON.stringify(response.data.Files));
-            var nextLink = '/photoscene/process?token=' + access_token + '&photosceneid=' + photosceneId;
+            var nextLink = '/api/forge/recap/photoscene/process?photosceneid=' + photosceneId;
             res.send('<p>Files added to photoscene!</p><a href="' + nextLink + '">Begin processing photoscene</a>');
         })
         .catch(function (error) {
@@ -161,10 +146,9 @@ app.get('/photoscene/upload', function (req, res) {
         });
 });
 
-// Route /photoscene/process
+// Route /api/forge/recap/photoscene/process
 // Starts photoscene processing.
-app.get('/photoscene/process', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/process', function (req, res) {
     var photosceneId = req.query.photosceneid;
     Axios({
         method: 'POST',
@@ -180,7 +164,7 @@ app.get('/photoscene/process', function (req, res) {
             if (response.data.Error) {
                 res.send(response.data.Error.msg);
             }
-            var nextLink = '/photoscene/checkprogress?token=' + access_token + '&photosceneid=' + photosceneId;
+            var nextLink = '/api/forge/recap/photoscene/checkprogress?photosceneid=' + photosceneId;
             res.send('<p>Photoscene is being processed!</p><a href="' + nextLink + '">Check progress of photoscene</a>');
         })
         .catch(function (error) {
@@ -190,10 +174,9 @@ app.get('/photoscene/process', function (req, res) {
         });
 });
 
-// Route /photoscene/checkprogress
+// Route /api/forge/recap/photoscene/checkprogress
 // Returns the processing progress and status of a photoscene.
-app.get('/photoscene/checkprogress', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/checkprogress', function (req, res) {
     var photosceneId = req.query.photosceneid;
     Axios({
         method: 'GET',
@@ -210,11 +193,11 @@ app.get('/photoscene/checkprogress', function (req, res) {
                 res.send(response.data.Error.msg);
             }
             if (response.data.Photoscene && response.data.Photoscene.progressmsg == 'DONE') {
-                var nextLink = '/photoscene/result?token=' + access_token + '&photosceneid=' + photosceneId;
+                var nextLink = '/api/forge/recap/photoscene/result?photosceneid=' + photosceneId;
                 res.send('<p>Photoscene process is complete!</p><a href="' + nextLink + '">View result of photoscene</a>');
             } else {
-                var nextLink = '/photoscene/delete?token=' + access_token + '&photosceneid=' + photosceneId;
-                res.send('<p>Photoscene is not ready, this may take a while. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...</p>');
+                var nextLink = '/api/forge/recap/photoscene/delete?photosceneid=' + photosceneId;
+                res.send('<p>Photoscene is not ready, this may take a while. Try refreshing <a href="/api/forge/recap/photoscene/checkprogress?photosceneid=' +  photosceneId + '">this page</a>. Progress: ' + response.data.Photoscene.progress + '%...</p>');
             }
             
         })
@@ -225,10 +208,9 @@ app.get('/photoscene/checkprogress', function (req, res) {
         });
 });
 
-// Route /photoscene/result
+// Route /api/forge/recap/photoscene/result
 // Returns a time-limited HTTPS link to an output file of the specified format.
-app.get('/photoscene/result', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/result', function (req, res) {
     var photosceneId = req.query.photosceneid;
     Axios({
         method: 'GET',
@@ -245,11 +227,11 @@ app.get('/photoscene/result', function (req, res) {
                 res.send(response.data.Error.msg);
             }
             if (response.data.Photoscene && response.data.Photoscene.progressmsg == 'DONE') {
-                var nextLink = '/photoscene/delete?token=' + access_token + '&photosceneid=' + photosceneId;
+                var nextLink = '/api/forge/recap/photoscene/delete?photosceneid=' + photosceneId;
                 res.send('<p>Success! This is the scene link:</p><p>' + response.data.Photoscene.scenelink + '</p>'
                     + 'Would you like to <a href="' + nextLink + '">delete photoscene</a>?');
             } else {
-                res.send('Photoscene is not ready. Try refreshing this page. Progress: ' + response.data.Photoscene.progress + '%...');
+                res.send('Photoscene is not ready. Try refreshing <a href="/api/forge/recap/photoscene/checkprogress?photosceneid=' +  photosceneId + '">this page</a>. Progress: ' + response.data.Photoscene.progress + '%...');
             }
             
         })
@@ -260,10 +242,9 @@ app.get('/photoscene/result', function (req, res) {
         });
 });
 
-// Route /photoscene/delete
+// Route /api/forge/recap/photoscene/delete
 // Deletes a photoscene and its associated assets (images, output files, ...).
-app.get('/photoscene/delete', function (req, res) {
-    var access_token = req.query.token;
+app.get('/api/forge/recap/photoscene/delete', function (req, res) {
     var photosceneId = req.query.photosceneid;
     Axios({
         method: 'DELETE',
