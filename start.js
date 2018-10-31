@@ -37,8 +37,8 @@ var server = app.listen(app.get('port'), function () {
 
 //-------------------------------------------------------------------
 // Configuration for your Forge account
-// Initialize the 2-legged OAuth2 client, set specific scopes and
-// set the token to auto refresh
+// Initialize the 2-legged OAuth2 client, and
+// set specific scopes
 //-------------------------------------------------------------------
 var FORGE_CLIENT_ID = process.env.FORGE_CLIENT_ID;
 var FORGE_CLIENT_SECRET = process.env.FORGE_CLIENT_SECRET;
