@@ -86,6 +86,7 @@ app.get('/api/forge/recap/photoscene/add', function (req, res) {
         },
         data: querystring.stringify({
             scenename: 'myscenename',
+            scenetype: 'object',
             format: 'rcm'
         })
     })
